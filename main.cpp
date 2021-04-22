@@ -8,17 +8,10 @@
 #include <string>
 #include <cstring>
 #include <utility>
+#include <chrono>
+#include <ctime>
+#include "entry.h"
 using namespace std;
-
-struct entry{
-    string ip;
-    string netmask;
-    string via;
-    bool direct;
-    bool connected;
-    int mask;
-    int dist;
-};
 
 uint32_t get_mask(int m){
     uint32_t t = 0;
@@ -30,22 +23,31 @@ uint32_t get_mask(int m){
     return ~t;
 }
 
-string get_netmask(string &s, int mask){
+pair<string,string> get_netmask_broadcast(string &s, int mask){
     struct sockaddr_in sa;
-    int result = inet_pton(AF_INET, s.c_str(), &(sa.sin_addr));
-    uint32_t tempaddr = ntohl(sa.sin_addr.s_addr);
-    tempaddr &= get_mask(mask);
-    sa.sin_addr.s_addr = htonl(tempaddr);
-    char tab[20];
-    inet_ntop(AF_INET, &(sa.sin_addr), tab, sizeof(tab));
-    string ret = tab;
-    return ret;
+    inet_pton(AF_INET, s.c_str(), &(sa.sin_addr));
+    uint32_t temp_netmask = ntohl(sa.sin_addr.s_addr);
+    uint32_t temp_broadcast = temp_netmask;
+    uint32_t fullmask = get_mask(mask);
+
+    temp_netmask &= fullmask;
+    temp_broadcast |= (~fullmask);
+
+    char netmask[20], broadcast[20];
+    sa.sin_addr.s_addr = htonl(temp_netmask);
+    inet_ntop(AF_INET, &(sa.sin_addr), netmask, sizeof(netmask));
+    sa.sin_addr.s_addr = htonl(temp_broadcast);
+    inet_ntop(AF_INET, &(sa.sin_addr), broadcast, sizeof(broadcast));
+
+    string ret_nm = netmask, ret_bc = broadcast;
+    return {ret_nm, ret_bc};
 }
+
 
 void print_vector(vector<entry> &v){
     // cout<<"\e[1;1H\e[2J";
     for(entry e: v){
-        cout<<e.ip<<"/"<<e.mask<<" ";
+        cout<<e.netmask<<"/"<<e.mask<<" ";
         if(e.connected){
             cout<<"distance "<<e.dist<<" ";
         }else{
@@ -60,6 +62,17 @@ void print_vector(vector<entry> &v){
     }
 }
 
+struct timer{
+    typedef chrono::system_clock clock;
+    typedef chrono::seconds seconds;
+
+    void reset() {start = clock::now();}
+    unsigned long long seconds_elapsed() const
+    { return chrono::duration_cast<seconds>(clock::now() - start).count();}
+
+    private: clock::time_point start = clock::now();
+};
+
 int main(){
     
     int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -67,6 +80,14 @@ int main(){
 		fprintf(stderr, "socket error: %s\n", strerror(errno)); 
 		return EXIT_FAILURE;
 	}
+
+    int broadcast_enable = 1;
+    int ret = setsockopt(sockfd, SOL_SOCKET, SO_BROADCAST, &broadcast_enable, sizeof(broadcast_enable));
+    if(ret){
+        fprintf(stderr, "socket error: %s\n", strerror(errno));
+        close(sockfd);
+		return EXIT_FAILURE;
+    }
 
     
     struct sockaddr_in server_address;
@@ -94,7 +115,8 @@ int main(){
         
         mask = stoi(ip.substr(pos+1), &sz);
         ip = ip.substr(0, pos);
-        V.push_back({ip, get_netmask(ip, mask), "", true, true, mask,dist});
+        pair<string,string> nm_bc = get_netmask_broadcast(ip, mask);
+        V.push_back({ip, nm_bc.first, nm_bc.second, "", true, true, mask,dist});
     }
 
     fd_set 	descriptors;
@@ -104,9 +126,16 @@ int main(){
 	tv.tv_sec = 1;
 	tv.tv_usec = 0;
 
-    for (;;) {
+    timer tmr;
+    unsigned long long relay = 10;
 
-        int ready = select(sockfd+1, &descriptors, NULL, NULL, &tv);
+    while(false) {
+
+        if(tmr.seconds_elapsed() > relay){
+            tmr.reset();
+        }
+
+        int ready = select(sockfd+1, &descriptors, NULL, NULL, NULL); //&tv
 
         if (ready < 0)
 		{
@@ -143,12 +172,12 @@ int main(){
 		buffer[datagram_len] = 0;
 		printf ("%ld-byte message: +%s+\n", datagram_len, buffer);
 		
-		char* reply = "Thank you!";
-		ssize_t reply_len = strlen(reply);
-		if (sendto(sockfd, reply, reply_len, 0, (struct sockaddr*)&sender, sender_len) != reply_len) {
-			fprintf(stderr, "sendto error: %s\n", strerror(errno)); 
-			return EXIT_FAILURE;
-		}
+		// char* reply = "Thank you!";
+		// ssize_t reply_len = strlen(reply);
+		// if (sendto(sockfd, reply, reply_len, 0, (struct sockaddr*)&sender, sender_len) != reply_len) {
+		// 	fprintf(stderr, "sendto error: %s\n", strerror(errno)); 
+		// 	return EXIT_FAILURE;
+		// }
 
 		fflush(stdout);
 	}
