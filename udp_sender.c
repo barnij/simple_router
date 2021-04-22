@@ -7,10 +7,17 @@
 #include <errno.h>
 #include "entry.h"
 
-int udp_sender(int sockfd, struct sockaddr_in *server_adress, struct entry *v, u_int32_t vsize)
+int udp_sender(int sockfd, struct sockaddr_in *server_adress, struct entry *v, uint32_t *vsize)
 {
-	for (int i=0; i<vsize; i++) {
+	for (int i=0; i<*vsize; i++) {
 		struct entry *e = &v[i];
+
+		e->activity--;
+		if(e->activity <= 0){
+			e->connected=false;
+			e->dist=INFINITY;
+		}
+
 		struct sockaddr_in server_address;
 		bzero (&server_address, sizeof(server_address));
 		server_address.sin_family      = AF_INET;
@@ -24,8 +31,10 @@ int udp_sender(int sockfd, struct sockaddr_in *server_adress, struct entry *v, u
 		ssize_t buffer_size = 9;
 
 		if (sendto(sockfd, buffer, buffer_size, 0, (struct sockaddr*) &server_address, sizeof(server_address)) != buffer_size) {
-			fprintf(stderr, "sendto error: %s\n", strerror(errno)); 
-			return EXIT_FAILURE;		
+			e->connected = false;
+			e->dist = INFINITY;
+			// fprintf(stderr, "sendto error: %s\n", strerror(errno)); 
+			// return EXIT_FAILURE;		
 		}
 
 	}

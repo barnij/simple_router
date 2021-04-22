@@ -1,4 +1,6 @@
 #include <stdbool.h>
+#include <stdint.h>
+#define INFINITY UINT32_MAX
 
 struct entry{
     struct sockaddr_in ip;
@@ -7,6 +9,7 @@ struct entry{
     struct sockaddr_in via;
     bool direct;
     bool connected;
-    int mask;
-    int dist;
+    uint8_t mask;
+    uint32_t dist;
+    int activity;
 };

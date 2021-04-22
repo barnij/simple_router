@@ -11,8 +11,9 @@
 
 struct entry V[1000];
 uint32_t vsize;
-double roundtime = 2.0;
+const double roundtime = 2.0;
 double timer = 0.0;
+const int default_activity = 4;
 
 uint32_t get_mask(int m){
     uint32_t t = 0;
@@ -23,6 +24,12 @@ uint32_t get_mask(int m){
     }
     return ~t;
 }
+
+struct respond{
+    struct in_addr ip;
+    uint8_t mask;
+    uint32_t distance;
+};
 
 bool ifround()
 {
@@ -73,6 +80,7 @@ void vector_add_special(char *ip_str, char *mask_str, int dist){
     V[x].direct = true;
     V[x].dist = dist;
     V[x].mask = mask;
+    V[x].activity = default_activity;
 }
 
 
@@ -112,6 +120,19 @@ void substr(char *sub, char *buff, int a, int n){
     bzero(sub,sizeof(sub));
     memcpy(sub, &buff[a], n);
     sub[n]='\0';
+}
+
+ssize_t find_entry_by_ip(uint32_t ip){
+    for(int i=0; i<vsize; i++){
+        if(V[i].ip.sin_addr.s_addr == ip){
+            return i;
+        }
+    }
+    return -1;
+}
+
+void reset_entry_activity(ssize_t pos){
+    V[pos].activity = default_activity;
 }
 
 int main(){
@@ -174,7 +195,7 @@ int main(){
 
         if(ifround()){
             print_vector();
-            udp_sender(sockfd, &server_address, V, vsize);
+            udp_sender(sockfd, &server_address, V, &vsize);
         }
 
         int ready = select(sockfd+1, &descriptors, NULL, NULL, &tv);
@@ -212,14 +233,14 @@ int main(){
 		printf ("Received UDP packet from IP address: %s, port: %d\n", sender_ip_str, ntohs(sender.sin_port));
 
 		buffer[datagram_len] = 0;
-		printf ("%ld-byte message: +%s+\n", datagram_len, buffer);
-		
-		char* reply = "Thank you!";
-		ssize_t reply_len = strlen(reply);
-		if (sendto(sockfd, reply, reply_len, 0, (struct sockaddr*)&sender, sender_len) != reply_len) {
-			fprintf(stderr, "sendto error: %s\n", strerror(errno)); 
-			return EXIT_FAILURE;
-		}
+        struct respond r = *(struct respond *)buffer;
+		char ip2[20];
+        inet_ntop(AF_INET, &(r.ip), ip2, sizeof(ip2));
+        int mask2 = r.mask;
+        int dist2 = r.distance;
+        printf("%s  %d  %d",ip2, mask2, dist2);
+
+
 
 		fflush(stdout);
 	}
