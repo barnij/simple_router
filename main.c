@@ -6,9 +6,13 @@
 #include <unistd.h>
 #include <string.h>
 #include "entry.h"
+#include "timer.h"
+#include "udp_sender.h"
 
 struct entry V[1000];
-u_int32_t vsize;
+uint32_t vsize;
+double round = 15;
+double timer = 0.0;
 
 uint32_t get_mask(int m){
     uint32_t t = 0;
@@ -20,6 +24,15 @@ uint32_t get_mask(int m){
     return ~t;
 }
 
+bool ifround()
+{
+	if(getTime() - timer > round){
+        timer = getTime();
+        return true;
+    }
+    return false;
+}
+
 struct sockaddr_in get_netmask(char *s, int mask){
     struct sockaddr_in sa;
     inet_pton(AF_INET, s, &(sa.sin_addr));
@@ -27,7 +40,7 @@ struct sockaddr_in get_netmask(char *s, int mask){
     uint32_t fullmask = get_mask(mask);
     netmask &= fullmask;
 
-    sa.sin_addr.s_addr = netmask;
+    sa.sin_addr.s_addr = htonl(netmask);
     return sa;
 }
 
@@ -38,7 +51,7 @@ struct sockaddr_in get_broadcast(char *s, int mask){
     uint32_t fullmask = get_mask(mask);
     broadcast |= (~fullmask);
 
-    sa.sin_addr.s_addr = broadcast;
+    sa.sin_addr.s_addr = htonl(broadcast);
     return sa;
 }
 
@@ -66,25 +79,25 @@ void vector_add_special(char *ip_str, char *mask_str, int dist){
 void print_vector(){
     //fprintf(stdin, "\e[1;1H\e[2J");
     for(int i=0; i<vsize; i++){
-        char ip[20];
+        char netmask[20];
         struct entry *e = &V[i];
-        inet_ntop(AF_INET, &(e->ip.sin_addr), ip, sizeof(ip));
-        fprintf(stdin, "%s/%d ", ip, e->mask);
+        inet_ntop(AF_INET, &(e->netmask.sin_addr), netmask, sizeof(netmask));
+        fprintf(stdout, "%s/%d ", netmask, e->mask);
         if(e->connected){
-            fprintf(stdin, "distance %d ",e->dist);
+            fprintf(stdout, "distance %d ",e->dist);
         }else{
-            fprintf(stdin, "unreachable ");
+            fprintf(stdout, "unreachable ");
         }
         if(e->direct){
-            fprintf(stdin, "connected directly");
+            fprintf(stdout, "connected directly");
         }else{
             char via[20];
             inet_ntop(AF_INET, &(e->via.sin_addr), via, sizeof(via));
-            fprintf(stdin, "via %s", via);
+            fprintf(stdout, "via %s", via);
         }
-        fprintf(stdin, "\n");
+        fprintf(stdout, "\n");
     }
-    fflush(stdin);
+    fflush(stdout);
 }
 
 int32_t strfind(char *s, char what){
@@ -102,6 +115,7 @@ void substr(char *sub, char *buff, int a, int n){
 }
 
 int main(){
+    timer = getTime();
     
     int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
 	if (sockfd < 0) {
@@ -154,13 +168,14 @@ int main(){
     fd_set 	descriptors;
 	FD_ZERO (&descriptors);
 	FD_SET 	(sockfd, &descriptors);
-	struct 	timeval tv;
-	tv.tv_sec = 1;
-	tv.tv_usec = 0;
 
-    while(false) {
+    while(true) {
 
-        int ready = select(sockfd+1, &descriptors, NULL, NULL, NULL); //&tv
+        if(ifround()){
+            udp_sender(sockfd, &server_address, V, vsize);
+        }
+
+        int ready = select(sockfd+1, &descriptors, NULL, NULL, NULL);
 
         if (ready < 0)
 		{
@@ -197,12 +212,12 @@ int main(){
 		buffer[datagram_len] = 0;
 		printf ("%ld-byte message: +%s+\n", datagram_len, buffer);
 		
-		// char* reply = "Thank you!";
-		// ssize_t reply_len = strlen(reply);
-		// if (sendto(sockfd, reply, reply_len, 0, (struct sockaddr*)&sender, sender_len) != reply_len) {
-		// 	fprintf(stderr, "sendto error: %s\n", strerror(errno)); 
-		// 	return EXIT_FAILURE;
-		// }
+		char* reply = "Thank you!";
+		ssize_t reply_len = strlen(reply);
+		if (sendto(sockfd, reply, reply_len, 0, (struct sockaddr*)&sender, sender_len) != reply_len) {
+			fprintf(stderr, "sendto error: %s\n", strerror(errno)); 
+			return EXIT_FAILURE;
+		}
 
 		fflush(stdout);
 	}
