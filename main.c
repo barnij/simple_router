@@ -11,7 +11,7 @@
 
 struct entry V[1000];
 uint32_t vsize;
-double round = 15;
+double roundtime = 2.0;
 double timer = 0.0;
 
 uint32_t get_mask(int m){
@@ -26,7 +26,7 @@ uint32_t get_mask(int m){
 
 bool ifround()
 {
-	if(getTime() - timer > round){
+	if(getTime() - timer > roundtime){
         timer = getTime();
         return true;
     }
@@ -163,19 +163,21 @@ int main(){
         vector_add_special(ip, mask, dist);
     }
 
-    print_vector();
-
     fd_set 	descriptors;
 	FD_ZERO (&descriptors);
 	FD_SET 	(sockfd, &descriptors);
+    struct timeval tv;
+    tv.tv_sec = 1;
+    tv.tv_usec = 0;
 
     while(true) {
 
         if(ifround()){
+            print_vector();
             udp_sender(sockfd, &server_address, V, vsize);
         }
 
-        int ready = select(sockfd+1, &descriptors, NULL, NULL, NULL);
+        int ready = select(sockfd+1, &descriptors, NULL, NULL, &tv);
 
         if (ready < 0)
 		{
@@ -183,7 +185,7 @@ int main(){
 			return EXIT_FAILURE;
 		}
 
-        if(! FD_ISSET(sockfd, &descriptors)){
+        if(ready == 0){
             continue;
         }
 
@@ -205,7 +207,7 @@ int main(){
 			return EXIT_FAILURE;
 		}
 
-		char sender_ip_str[20]; 
+		char sender_ip_str[20];
 		inet_ntop(AF_INET, &(sender.sin_addr), sender_ip_str, sizeof(sender_ip_str));
 		printf ("Received UDP packet from IP address: %s, port: %d\n", sender_ip_str, ntohs(sender.sin_port));
 

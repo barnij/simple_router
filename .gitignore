@@ -1,3 +1,4 @@
 .vscode/*
 main
 udp_client
+*.o
