@@ -1,17 +1,14 @@
-#include <iostream>
+#include <stdio.h>
 #include <netinet/ip.h>
 #include <arpa/inet.h>
 #include <errno.h>
-#include <vector>
-#include <cstdlib>
+#include <stdlib.h>
 #include <unistd.h>
-#include <string>
-#include <cstring>
-#include <utility>
-#include <chrono>
-#include <ctime>
+#include <string.h>
 #include "entry.h"
-using namespace std;
+
+struct entry V[1000];
+u_int32_t vsize;
 
 uint32_t get_mask(int m){
     uint32_t t = 0;
@@ -23,55 +20,86 @@ uint32_t get_mask(int m){
     return ~t;
 }
 
-pair<string,string> get_netmask_broadcast(string &s, int mask){
+struct sockaddr_in get_netmask(char *s, int mask){
     struct sockaddr_in sa;
-    inet_pton(AF_INET, s.c_str(), &(sa.sin_addr));
-    uint32_t temp_netmask = ntohl(sa.sin_addr.s_addr);
-    uint32_t temp_broadcast = temp_netmask;
+    inet_pton(AF_INET, s, &(sa.sin_addr));
+    uint32_t netmask = ntohl(sa.sin_addr.s_addr);
     uint32_t fullmask = get_mask(mask);
+    netmask &= fullmask;
 
-    temp_netmask &= fullmask;
-    temp_broadcast |= (~fullmask);
+    sa.sin_addr.s_addr = netmask;
+    return sa;
+}
 
-    char netmask[20], broadcast[20];
-    sa.sin_addr.s_addr = htonl(temp_netmask);
-    inet_ntop(AF_INET, &(sa.sin_addr), netmask, sizeof(netmask));
-    sa.sin_addr.s_addr = htonl(temp_broadcast);
-    inet_ntop(AF_INET, &(sa.sin_addr), broadcast, sizeof(broadcast));
+struct sockaddr_in get_broadcast(char *s, int mask){
+    struct sockaddr_in sa;
+    inet_pton(AF_INET, s, &(sa.sin_addr));
+    uint32_t broadcast = ntohl(sa.sin_addr.s_addr);
+    uint32_t fullmask = get_mask(mask);
+    broadcast |= (~fullmask);
 
-    string ret_nm = netmask, ret_bc = broadcast;
-    return {ret_nm, ret_bc};
+    sa.sin_addr.s_addr = broadcast;
+    return sa;
+}
+
+struct sockaddr_in get_ip(char *s){
+    struct sockaddr_in sa;
+    inet_pton(AF_INET, s, &(sa.sin_addr));
+    return sa;
 }
 
 
-void print_vector(vector<entry> &v){
-    // cout<<"\e[1;1H\e[2J";
-    for(entry e: v){
-        cout<<e.netmask<<"/"<<e.mask<<" ";
-        if(e.connected){
-            cout<<"distance "<<e.dist<<" ";
+void vector_add_special(char *ip_str, char *mask_str, int dist){
+    uint32_t x = vsize;
+    vsize++;
+    int mask = atoi(mask_str);
+    V[x].ip = get_ip(ip_str);
+    V[x].broadcast = get_broadcast(ip_str, mask);
+    V[x].netmask = get_netmask(ip_str, mask);
+    V[x].connected = true;
+    V[x].direct = true;
+    V[x].dist = dist;
+    V[x].mask = mask;
+}
+
+
+void print_vector(){
+    //fprintf(stdin, "\e[1;1H\e[2J");
+    for(int i=0; i<vsize; i++){
+        char ip[20];
+        struct entry *e = &V[i];
+        inet_ntop(AF_INET, &(e->ip.sin_addr), ip, sizeof(ip));
+        fprintf(stdin, "%s/%d ", ip, e->mask);
+        if(e->connected){
+            fprintf(stdin, "distance %d ",e->dist);
         }else{
-            cout<<"unreachable ";
+            fprintf(stdin, "unreachable ");
         }
-        if(e.direct){
-            cout<<"connected directly";
+        if(e->direct){
+            fprintf(stdin, "connected directly");
         }else{
-            cout<<"via "<<e.via;
+            char via[20];
+            inet_ntop(AF_INET, &(e->via.sin_addr), via, sizeof(via));
+            fprintf(stdin, "via %s", via);
         }
-        cout<<"\n";
+        fprintf(stdin, "\n");
     }
+    fflush(stdin);
 }
 
-struct timer{
-    typedef chrono::system_clock clock;
-    typedef chrono::seconds seconds;
+int32_t strfind(char *s, char what){
+    for(int i=0; s[i]; i++){
+        if(s[i] == what)
+            return i;
+    }
+    return -1;
+}
 
-    void reset() {start = clock::now();}
-    unsigned long long seconds_elapsed() const
-    { return chrono::duration_cast<seconds>(clock::now() - start).count();}
-
-    private: clock::time_point start = clock::now();
-};
+void substr(char *sub, char *buff, int a, int n){
+    bzero(sub,sizeof(sub));
+    memcpy(sub, &buff[a], n);
+    sub[n]='\0';
+}
 
 int main(){
     
@@ -99,25 +127,29 @@ int main(){
 		fprintf(stderr, "bind error: %s\n", strerror(errno)); 
 		return EXIT_FAILURE;
 	}
-    
 
-    vector < entry > V; 
 
     int n;
-    cin>>n;
+    scanf("%d", &n);
     for(int i=0; i<n; i++){
-        int mask, dist;
-        string::size_type sz;
-        string ip, t;
+        int dist;
+        char temp_ip[20], ip[20], t[9], mask[3];
 
-        cin>>ip>>t>>dist;
-        size_t pos = ip.find('/');
+        scanf("%s %s %d", temp_ip, t, &dist);
+        int32_t pos = strfind(temp_ip, '/');
+
+        if(pos < 0){
+            fprintf(stderr, "input error\n"); 
+		    return EXIT_FAILURE;
+        }
         
-        mask = stoi(ip.substr(pos+1), &sz);
-        ip = ip.substr(0, pos);
-        pair<string,string> nm_bc = get_netmask_broadcast(ip, mask);
-        V.push_back({ip, nm_bc.first, nm_bc.second, "", true, true, mask,dist});
+        substr(mask, temp_ip, pos+1, strlen(temp_ip)-pos-1);
+        substr(ip, temp_ip, 0, pos);
+
+        vector_add_special(ip, mask, dist);
     }
+
+    print_vector();
 
     fd_set 	descriptors;
 	FD_ZERO (&descriptors);
@@ -126,14 +158,7 @@ int main(){
 	tv.tv_sec = 1;
 	tv.tv_usec = 0;
 
-    timer tmr;
-    unsigned long long relay = 10;
-
     while(false) {
-
-        if(tmr.seconds_elapsed() > relay){
-            tmr.reset();
-        }
 
         int ready = select(sockfd+1, &descriptors, NULL, NULL, NULL); //&tv
 
