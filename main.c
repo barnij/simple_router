@@ -205,6 +205,7 @@ int main(){
         // inet_ntop(AF_INET, &(rip), ip2, sizeof(ip2));
 
         int t1 = find_entry_by_netmask(rip.s_addr);
+        printf("t1: %d\n",t1);
         V[t1].activity = default_activity;
 
         if(t1 < 0){
