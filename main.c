@@ -201,8 +201,9 @@ int main(){
         struct in_addr rip = *(struct in_addr *)buffer;
         uint8_t mask2 = *(uint8_t *)(buffer+4);
         uint32_t dist2 = ntohl(*(uint32_t *)(buffer+5));
-		// char ip2[20];
-        // inet_ntop(AF_INET, &(rip), ip2, sizeof(ip2));
+		char ip2[20];
+        inet_ntop(AF_INET, &(rip), ip2, sizeof(ip2));
+        printf("%s\n",ip2);
 
         int t1 = find_entry_by_netmask(rip.s_addr);
         printf("t1: %d\n",t1);
