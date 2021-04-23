@@ -195,7 +195,7 @@ int main(){
 
 		char sender_ip_str[20];
 		inet_ntop(AF_INET, &(sender.sin_addr), sender_ip_str, sizeof(sender_ip_str));
-		// printf ("Received UDP packet from IP address: %s, port: %d\n", sender_ip_str, ntohs(sender.sin_port));
+		printf ("Received UDP packet from IP address: %s, port: %d\n", sender_ip_str, ntohs(sender.sin_port));
 
 		buffer[datagram_len] = 0;
         struct in_addr rip = *(struct in_addr *)buffer;
