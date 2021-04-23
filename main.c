@@ -208,6 +208,7 @@ int main(){
         V[t1].activity = default_activity;
 
         if(t1 < 0){
+            printf("HALO\n");
             vector_add(sender_ip_str, mask2, dist2);
         }else{
             if(sender.sin_addr.s_addr == V[t1].via.sin_addr.s_addr){
