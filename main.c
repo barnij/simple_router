@@ -55,7 +55,7 @@ void vector_add(char *ip_str, uint8_t mask, uint32_t dist){
 
 void print_vector(){
     fprintf(stdin, "\e[1;1H\e[2J");
-    for(int i=0; i<vsize; i++){
+    for(uint32_t i=0; i<vsize; i++){
         char netmask[20];
         struct entry *e = &V[i];
         inet_ntop(AF_INET, &(e->netmask.sin_addr), netmask, sizeof(netmask));
@@ -78,7 +78,7 @@ void print_vector(){
 }
 
 ssize_t find_entry_by_ip(uint32_t x){
-    for(int i=0; i<vsize; i++){
+    for(uint32_t i=0; i<vsize; i++){
         if(V[i].ip.sin_addr.s_addr == x){
             return i;
         }
@@ -87,7 +87,7 @@ ssize_t find_entry_by_ip(uint32_t x){
 }
 
 ssize_t find_entry_by_netmask(uint32_t x){
-    for(int i=0; i<vsize; i++){
+    for(uint32_t i=0; i<vsize; i++){
         if(V[i].netmask.sin_addr.s_addr == x){
             return i;
         }
@@ -208,7 +208,6 @@ int main(){
         V[t1].activity = default_activity;
 
         if(t1 < 0){
-            char ipt[20];
             vector_add(sender_ip_str, mask2, dist2);
         }else{
             if(sender.sin_addr.s_addr == V[t1].via.sin_addr.s_addr){
