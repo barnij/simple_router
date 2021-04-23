@@ -156,7 +156,7 @@ int main(){
 
         if(ifround()){
             print_vector();
-            udp_sender(sockfd, &server_address, V, &vsize);
+            udp_sender(sockfd, V, &vsize);
         }
 
         int ready = select(sockfd+1, &descriptors, NULL, NULL, &tv);

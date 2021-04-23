@@ -8,13 +8,13 @@
 #include "entry.h"
 
 void remove_entry(struct entry *v, uint32_t *vsize, ssize_t pos){
-	for(int i=pos; i<*vsize; i++){
+	for(uint32_t i=pos; i<*vsize; i++){
 		v[i]=v[i+1];
 	}
-	*vsize--;
+	(*vsize)--;
 }
 
-int udp_sender(int sockfd, struct sockaddr_in *server_adress, struct entry *v, uint32_t *vsize)
+int udp_sender(int sockfd, struct entry *v, uint32_t *vsize)
 {
 	for (ssize_t i=0; i<*vsize; i++) {
 		struct entry *e = &v[i];
