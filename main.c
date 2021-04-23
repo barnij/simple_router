@@ -86,7 +86,7 @@ ssize_t find_entry_by_ip(uint32_t x){
     return -1;
 }
 
-ssize_t find_entry_by_netmask(uint32_t x){
+int find_entry_by_netmask(uint32_t x){
     for(uint32_t i=0; i<vsize; i++){
         if(V[i].netmask.sin_addr.s_addr == x){
             return i;
@@ -204,7 +204,7 @@ int main(){
 		// char ip2[20];
         // inet_ntop(AF_INET, &(rip), ip2, sizeof(ip2));
 
-        ssize_t t1 = find_entry_by_netmask(rip.s_addr);
+        int t1 = find_entry_by_netmask(rip.s_addr);
         V[t1].activity = default_activity;
 
         if(t1 < 0){
