@@ -48,7 +48,7 @@ void vector_add(char *ip_str, uint8_t mask, uint32_t dist){
     V[x].netmask = get_netmask(ip_str, mask);
     V[x].connected = true;
     V[x].direct = false;
-    V[x].dist = dist;
+    V[x].dist = dist+V[find_entry_by_ip(ip_str)].dist;
     V[x].mask = mask;
     V[x].activity = default_activity;
 }
