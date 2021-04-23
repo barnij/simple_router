@@ -31,25 +31,29 @@ int udp_sender(int sockfd, struct entry *v, uint32_t *vsize)
 			e->dist=INFINITY;
 		}
 
-		struct sockaddr_in server_address;
-		bzero (&server_address, sizeof(server_address));
-		server_address.sin_family      = AF_INET;
-		server_address.sin_port        = htons(54321);
-		server_address.sin_addr		   = e->broadcast.sin_addr;
+		if(!e->direct)
+			continue;
 
-		uint8_t buffer[9];
-		*((struct in_addr *)buffer) = e->netmask.sin_addr;
-		buffer[4] = e->mask;
-		*((uint32_t *)(buffer+5)) = htonl(e->dist);
-		ssize_t buffer_size = 9;
+		for(uint32_t j=0; j<*vsize; j++){
+			struct entry *e1 = &v[j];
 
-		if (sendto(sockfd, buffer, buffer_size, 0, (struct sockaddr*) &server_address, sizeof(server_address)) != buffer_size) {
-			e->connected = false;
-			e->dist = INFINITY;
-			// fprintf(stderr, "sendto error: %s\n", strerror(errno)); 
-			// return EXIT_FAILURE;		
+			struct sockaddr_in server_address;
+			bzero (&server_address, sizeof(server_address));
+			server_address.sin_family      = AF_INET;
+			server_address.sin_port        = htons(54321);
+			server_address.sin_addr		   = e->broadcast.sin_addr;
+
+			uint8_t buffer[9];
+			*((struct in_addr *)buffer) = e1->netmask.sin_addr;
+			buffer[4] = e1->mask;
+			*((uint32_t *)(buffer+5)) = htonl(e1->dist);
+			ssize_t buffer_size = 9;
+
+			if (sendto(sockfd, buffer, buffer_size, 0, (struct sockaddr*) &server_address, sizeof(server_address)) != buffer_size) {
+				e->connected = false;
+				e->dist = INFINITY;	
+			}
 		}
-
 	}
 
 	return EXIT_SUCCESS;
