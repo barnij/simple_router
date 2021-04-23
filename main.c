@@ -8,28 +8,14 @@
 #include "entry.h"
 #include "timer.h"
 #include "udp_sender.h"
+#include "ip_stuff.h"
+#include "str_stuff.h"
 
 struct entry V[1000];
 uint32_t vsize;
 const double roundtime = 2.0;
 double timer = 0.0;
 const int default_activity = 4;
-
-uint32_t get_mask(int m){
-    uint32_t t = 0;
-    m = 32 - m;
-    while(m--){
-        t<<=1;
-        t|=1;
-    }
-    return ~t;
-}
-
-struct respond{
-    struct in_addr ip;
-    uint8_t mask;
-    uint32_t distance;
-};
 
 bool ifround()
 {
@@ -39,35 +25,6 @@ bool ifround()
     }
     return false;
 }
-
-struct sockaddr_in get_netmask(char *s, int mask){
-    struct sockaddr_in sa;
-    inet_pton(AF_INET, s, &(sa.sin_addr));
-    uint32_t netmask = ntohl(sa.sin_addr.s_addr);
-    uint32_t fullmask = get_mask(mask);
-    netmask &= fullmask;
-
-    sa.sin_addr.s_addr = htonl(netmask);
-    return sa;
-}
-
-struct sockaddr_in get_broadcast(char *s, int mask){
-    struct sockaddr_in sa;
-    inet_pton(AF_INET, s, &(sa.sin_addr));
-    uint32_t broadcast = ntohl(sa.sin_addr.s_addr);
-    uint32_t fullmask = get_mask(mask);
-    broadcast |= (~fullmask);
-
-    sa.sin_addr.s_addr = htonl(broadcast);
-    return sa;
-}
-
-struct sockaddr_in get_ip(char *s){
-    struct sockaddr_in sa;
-    inet_pton(AF_INET, s, &(sa.sin_addr));
-    return sa;
-}
-
 
 void vector_add_special(char *ip_str, char *mask_str, int dist){
     uint32_t x = vsize;
@@ -83,9 +40,21 @@ void vector_add_special(char *ip_str, char *mask_str, int dist){
     V[x].activity = default_activity;
 }
 
+void vector_add(char *ip_str, uint8_t mask, uint32_t dist){
+    uint32_t x = vsize;
+    vsize++;
+    V[x].ip = get_ip(ip_str);
+    V[x].broadcast = get_broadcast(ip_str, mask);
+    V[x].netmask = get_netmask(ip_str, mask);
+    V[x].connected = true;
+    V[x].direct = false;
+    V[x].dist = dist;
+    V[x].mask = mask;
+    V[x].activity = default_activity;
+}
 
 void print_vector(){
-    //fprintf(stdin, "\e[1;1H\e[2J");
+    fprintf(stdin, "\e[1;1H\e[2J");
     for(int i=0; i<vsize; i++){
         char netmask[20];
         struct entry *e = &V[i];
@@ -108,32 +77,24 @@ void print_vector(){
     fflush(stdout);
 }
 
-int32_t strfind(char *s, char what){
-    for(int i=0; s[i]; i++){
-        if(s[i] == what)
-            return i;
-    }
-    return -1;
-}
-
-void substr(char *sub, char *buff, int a, int n){
-    bzero(sub,sizeof(sub));
-    memcpy(sub, &buff[a], n);
-    sub[n]='\0';
-}
-
-ssize_t find_entry_by_ip(uint32_t ip){
+ssize_t find_entry_by_ip(uint32_t x){
     for(int i=0; i<vsize; i++){
-        if(V[i].ip.sin_addr.s_addr == ip){
+        if(V[i].ip.sin_addr.s_addr == x){
             return i;
         }
     }
     return -1;
 }
 
-void reset_entry_activity(ssize_t pos){
-    V[pos].activity = default_activity;
+ssize_t find_entry_by_netmask(uint32_t x){
+    for(int i=0; i<vsize; i++){
+        if(V[i].netmask.sin_addr.s_addr == x){
+            return i;
+        }
+    }
+    return -1;
 }
+
 
 int main(){
     timer = getTime();
@@ -184,14 +145,14 @@ int main(){
         vector_add_special(ip, mask, dist);
     }
 
-    fd_set 	descriptors;
-	FD_ZERO (&descriptors);
-	FD_SET 	(sockfd, &descriptors);
     struct timeval tv;
-    tv.tv_sec = 1;
+    tv.tv_sec = 4;
     tv.tv_usec = 0;
 
-    while(true) {
+    for(;;) {
+        fd_set 	descriptors;
+        FD_ZERO (&descriptors);
+        FD_SET 	(sockfd, &descriptors);
 
         if(ifround()){
             print_vector();
@@ -206,13 +167,17 @@ int main(){
 			return EXIT_FAILURE;
 		}
 
+        tv.tv_sec = 4 - (getTime()- timer);
+
         if(ready == 0){
+            tv.tv_sec = 4;
+            tv.tv_usec = 0;
             continue;
         }
 
 		struct sockaddr_in 	sender;	
 		socklen_t 			sender_len = sizeof(sender);
-		u_int8_t 			buffer[IP_MAXPACKET+1];
+		uint8_t 			buffer[IP_MAXPACKET+1];
 
 		ssize_t datagram_len = recvfrom (
             sockfd,
@@ -230,17 +195,31 @@ int main(){
 
 		char sender_ip_str[20];
 		inet_ntop(AF_INET, &(sender.sin_addr), sender_ip_str, sizeof(sender_ip_str));
-		printf ("Received UDP packet from IP address: %s, port: %d\n", sender_ip_str, ntohs(sender.sin_port));
+		// printf ("Received UDP packet from IP address: %s, port: %d\n", sender_ip_str, ntohs(sender.sin_port));
 
 		buffer[datagram_len] = 0;
-        struct respond r = *(struct respond *)buffer;
-		char ip2[20];
-        inet_ntop(AF_INET, &(r.ip), ip2, sizeof(ip2));
-        int mask2 = r.mask;
-        int dist2 = r.distance;
-        printf("%s  %d  %d",ip2, mask2, dist2);
+        struct in_addr rip = *(struct in_addr *)buffer;
+        uint8_t mask2 = *(uint8_t *)(buffer+4);
+        uint32_t dist2 = ntohl(*(uint32_t *)(buffer+5));
+		// char ip2[20];
+        // inet_ntop(AF_INET, &(rip), ip2, sizeof(ip2));
 
+        ssize_t t1 = find_entry_by_netmask(rip.s_addr);
+        V[t1].activity = default_activity;
 
+        if(t1 < 0){
+            char ipt[20];
+            vector_add(sender_ip_str, mask2, dist2);
+        }else{
+            if(sender.sin_addr.s_addr == V[t1].via.sin_addr.s_addr){
+                V[t1].dist = dist2;
+            }else{
+                if(dist2 < V[t1].dist){
+                    V[t1].dist = dist2;
+                    V[t1].via = sender;
+                }
+            }
+        }
 
 		fflush(stdout);
 	}

@@ -73,7 +73,7 @@ int main()
 	
 	uint8_t buffer[9];
 	*((struct in_addr *)buffer) = e.netmask.sin_addr;
-	buffer[4] = (uint8_t)e.mask;
+	buffer[4] = e.mask;
 	*((uint32_t *)(buffer+5)) = htonl(e.dist);
 	ssize_t buffer_size = 9;
 	if (sendto(sockfd, buffer, buffer_size, 0, (struct sockaddr*) &server_address, sizeof(server_address)) != buffer_size) {
