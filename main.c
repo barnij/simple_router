@@ -199,9 +199,9 @@ int main(){
 
 		buffer[datagram_len] = 0;
         struct in_addr rip;
-        rip.s_addr = *(uint32_t *)buffer;
-        uint8_t mask2 = *(uint8_t *)(buffer+4);
-        uint32_t dist2 = ntohl(*(uint32_t *)(buffer+5));
+        rip.s_addr = *((uint32_t *)buffer);
+        uint8_t mask2 = *((uint8_t *)(buffer+4));
+        uint32_t dist2 = ntohl(*((uint32_t *)(buffer+5)));
 		char ip2[20];
         inet_ntop(AF_INET, &(rip), ip2, sizeof(ip2));
         printf("%s\n",ip2);
