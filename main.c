@@ -12,93 +12,100 @@
 #include "str_stuff.h"
 
 struct entry V[1000];
+struct entry directly[100];
 uint32_t vsize;
-const double roundtime = 2.0;
-double timer = 0.0;
-const int default_activity = 4;
+uint32_t dsize;
+const double ROUND_TIME = 4.0;
+double timer;
+const int DEFAULT_ACTIVITY = 4;
 
-bool ifround()
-{
-	if(getTime() - timer > roundtime){
+bool if_round() {
+	if (getTime() - timer > ROUND_TIME) {
         timer = getTime();
         return true;
     }
     return false;
 }
 
-void vector_add_special(char *ip_str, char *mask_str, int dist){
-    uint32_t x = vsize;
-    vsize++;
+bool find_direct(uint32_t x) {
+    for (uint32_t i=0; i<dsize; i++) {
+        if (directly[i].netmask.sin_addr.s_addr == htonl(ntohl(x) & get_mask(directly[i].mask))) {
+            V[i].activity = DEFAULT_ACTIVITY;
+            return directly[i].via.sin_addr.s_addr == x;
+        }
+    }
+    return false;
+}
+
+void vector_add_first(char *ip_str, char *mask_str, int dist) {
     int mask = atoi(mask_str);
-    V[x].ip = get_ip(ip_str);
-    V[x].broadcast = get_broadcast(ip_str, mask);
-    V[x].netmask = get_netmask(ip_str, mask);
-    V[x].connected = true;
-    V[x].direct = true;
-    V[x].dist = dist;
-    V[x].mask = mask;
-    V[x].activity = default_activity;
-}
-
-void vector_add(char *ip_str, uint8_t mask, uint32_t dist){
-    uint32_t x = vsize;
+    V[vsize].broadcast = get_broadcast(ip_str, mask);
+    V[vsize].netmask = get_netmask(ip_str, mask);
+    V[vsize].direct = true;
+    V[vsize].dist = dist;
+    V[vsize].mask = mask;
+    V[vsize].via = get_ip(ip_str);
+    V[vsize].activity = DEFAULT_ACTIVITY;
     vsize++;
-    V[x].ip = get_ip(ip_str);
-    V[x].broadcast = get_broadcast(ip_str, mask);
-    V[x].netmask = get_netmask(ip_str, mask);
-    V[x].connected = true;
-    V[x].direct = false;
-    V[x].dist = dist+V[find_entry_by_ip(ip_str)].dist;
-    V[x].mask = mask;
-    V[x].activity = default_activity;
 }
 
-void print_vector(){
-    fprintf(stdin, "\e[1;1H\e[2J");
-    for(uint32_t i=0; i<vsize; i++){
+void vector_add(char *netmask_str, struct sockaddr_in ip, uint8_t mask, uint32_t dist) {
+    V[vsize].via = ip;
+    V[vsize].broadcast = get_broadcast(netmask_str, mask);
+    V[vsize].netmask = get_ip(netmask_str);
+    V[vsize].direct = false;
+    V[vsize].dist = dist;
+    V[vsize].mask = mask;
+    V[vsize].activity = DEFAULT_ACTIVITY;
+    vsize++;
+}
+
+void print_vector() {
+    fprintf(stdout, "\e[1;1H\e[2J");
+    for (uint32_t i=0; i<vsize; i++) {
         char netmask[20];
         struct entry *e = &V[i];
+
         inet_ntop(AF_INET, &(e->netmask.sin_addr), netmask, sizeof(netmask));
         fprintf(stdout, "%s/%d ", netmask, e->mask);
-        if(e->connected){
+
+        if (e->activity > 0 && e->dist < INFINITY){
             fprintf(stdout, "distance %d ",e->dist);
-        }else{
+        } else {
             fprintf(stdout, "unreachable ");
         }
-        if(e->direct){
+
+        if (e->direct) {
             fprintf(stdout, "connected directly");
-        }else{
+        } else {
             char via[20];
             inet_ntop(AF_INET, &(e->via.sin_addr), via, sizeof(via));
             fprintf(stdout, "via %s", via);
         }
+
         fprintf(stdout, "\n");
     }
     fflush(stdout);
 }
 
-ssize_t find_entry_by_ip(uint32_t x){
-    for(uint32_t i=0; i<vsize; i++){
-        if(V[i].ip.sin_addr.s_addr == x){
-            return i;
-        }
-    }
-    return -1;
-}
 
-int find_entry_by_netmask(uint32_t x){
-    for(uint32_t i=0; i<vsize; i++){
-        if(V[i].netmask.sin_addr.s_addr == x){
-            return i;
+int find_entry_by_netmask(uint32_t x) {
+    uint32_t w = INFINITY;
+    uint32_t f = -1;
+    for (uint32_t i=0; i<vsize; i++) {
+        if (V[i].netmask.sin_addr.s_addr == x && V[i].dist <= w) {
+            w = V[i].dist;
+            f = i;
         }
     }
-    return -1;
+
+    return f;
 }
 
 
 int main(){
     timer = getTime();
-    
+
     int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
 	if (sockfd < 0) {
 		fprintf(stderr, "socket error: %s\n", strerror(errno)); 
@@ -107,7 +114,7 @@ int main(){
 
     int broadcast_enable = 1;
     int ret = setsockopt(sockfd, SOL_SOCKET, SO_BROADCAST, &broadcast_enable, sizeof(broadcast_enable));
-    if(ret){
+    if(ret) {
         fprintf(stderr, "socket error: %s\n", strerror(errno));
         close(sockfd);
 		return EXIT_FAILURE;
@@ -127,7 +134,7 @@ int main(){
 
     int n;
     scanf("%d", &n);
-    for(int i=0; i<n; i++){
+    for (int i=0; i<n; i++) {
         int dist;
         char temp_ip[20], ip[20], t[9], mask[3];
 
@@ -142,7 +149,9 @@ int main(){
         substr(mask, temp_ip, pos+1, strlen(temp_ip)-pos-1);
         substr(ip, temp_ip, 0, pos);
 
-        vector_add_special(ip, mask, dist);
+        vector_add_first(ip, mask, dist);
+        directly[dsize]=V[dsize];
+        dsize++;
     }
 
     struct timeval tv;
@@ -154,9 +163,9 @@ int main(){
         FD_ZERO (&descriptors);
         FD_SET 	(sockfd, &descriptors);
 
-        if(ifround()){
+        if(if_round()){
             print_vector();
-            udp_sender(sockfd, V, &vsize);
+            udp_sender(sockfd, V, directly, &vsize);
         }
 
         int ready = select(sockfd+1, &descriptors, NULL, NULL, &tv);
@@ -167,7 +176,8 @@ int main(){
 			return EXIT_FAILURE;
 		}
 
-        tv.tv_sec = 4 - (getTime()- timer);
+        tv.tv_sec = 4 - (getTime() - timer);
+        tv.tv_sec = tv.tv_sec < 0 ? 0 : tv.tv_sec;
 
         if(ready == 0){
             tv.tv_sec = 4;
@@ -177,7 +187,7 @@ int main(){
 
 		struct sockaddr_in 	sender;	
 		socklen_t 			sender_len = sizeof(sender);
-		uint8_t 			buffer[IP_MAXPACKET+1];
+		uint8_t 			buffer[IP_MAXPACKET];
 
 		ssize_t datagram_len = recvfrom (
             sockfd,
@@ -193,33 +203,42 @@ int main(){
 			return EXIT_FAILURE;
 		}
 
+        
+
 		char sender_ip_str[20];
 		inet_ntop(AF_INET, &(sender.sin_addr), sender_ip_str, sizeof(sender_ip_str));
-		printf ("Received UDP packet from IP address: %s, port: %d\n", sender_ip_str, ntohs(sender.sin_port));
+		// printf ("Received UDP packet from IP address: %s, port: %d\n", sender_ip_str, ntohs(sender.sin_port));
 
 		buffer[datagram_len] = 0;
         struct in_addr rip;
-        rip.s_addr = ntohl(*((uint32_t *)buffer));
+        rip.s_addr = *((uint32_t *)buffer);
         uint8_t mask2 = *((uint8_t *)(buffer+4));
         uint32_t dist2 = ntohl(*((uint32_t *)(buffer+5)));
-		char ip2[20];
-        inet_ntop(AF_INET, &(rip), ip2, sizeof(ip2));
-        printf("%s\n",ip2);
+		char netmask2[20];
+        inet_ntop(AF_INET, &(rip), netmask2, sizeof(netmask2));
+        // printf("%s %d %d\n",netmask2,mask2,dist2);
 
-        int t1 = find_entry_by_netmask(rip.s_addr);
-        printf("t1: %d\n",t1);
-        V[t1].activity = default_activity;
+        int32_t t1 = find_entry_by_netmask(rip.s_addr);
+        bool d1 = find_direct(sender.sin_addr.s_addr);
+        // printf("t1: %d, odl: %d, d1: %d\n",t1,V[t1].dist, d1);
+
+        if(d1){
+            continue;
+        }
 
         if(t1 < 0){
-            printf("HALO\n");
-            vector_add(sender_ip_str, mask2, dist2);
+            if(dist2 < INFINITY)
+                vector_add(netmask2, sender, mask2, dist2);
         }else{
             if(sender.sin_addr.s_addr == V[t1].via.sin_addr.s_addr){
+                if(dist2 != INFINITY)
+                    V[t1].activity = DEFAULT_ACTIVITY;
                 V[t1].dist = dist2;
             }else{
                 if(dist2 < V[t1].dist){
                     V[t1].dist = dist2;
                     V[t1].via = sender;
+                    V[t1].activity = DEFAULT_ACTIVITY;
                 }
             }
         }

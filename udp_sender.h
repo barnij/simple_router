@@ -1,3 +1,3 @@
 #include <stdint.h>
 
-int udp_sender(int sockfd, struct entry *v, uint32_t *vsize);
+int udp_sender(int sockfd, struct entry *v, struct entry *d, uint32_t *vsize);
