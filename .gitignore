@@ -1,6 +1,3 @@
 .vscode/*
-main
-udp_client
 *.o
-udp_client1
 router
